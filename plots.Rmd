@@ -1,0 +1,25 @@
+---
+title: "Plots"
+author: "Me!"
+date: "2024-10-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Including Plots
+
+```{r}
+df = tibble(
+  x = rnorm(100,2,5),
+  y = 1 + 2 * x - 0.5 * x^ 7
+)
+
+df|>
+  ggplot(aes(x = x, y = y))+
+  geom_point()
+```
+
