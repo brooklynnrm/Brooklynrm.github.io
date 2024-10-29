@@ -1,0 +1,92 @@
+---
+title: "Plotly"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+ ## Loading Data
+ 
+ We're gonna look at the NYC Airbnb data
+ 
+```{r}
+library(p8105.datasets)
+library(tidyverse)
+library(plotly)
+```
+ 
+```{r}
+data("nyc_airbnb")
+
+nyc_airbnb = 
+  nyc_airbnb |> 
+  mutate(rating = review_scores_location / 2) |>
+  select(
+    neighbourhood_group, neighbourhood, rating, price, room_type, lat, long) |>
+  filter(
+    !is.na(rating), 
+    neighbourhood_group == "Manhattan",
+    room_type == "Entire home/apt",
+    price %in% 100:500) |>
+  drop_na(rating)
+```
+ 
+ ## Let's make plotly plots
+ 
+ ### Scatterplots
+ 
+ types and mdoes are similar to the `geom_` functions in ggplot
+ 
+```{r}
+nyc_airbnb |>
+  mutate(text_label = str_c("Price: $",price, " Rating:", rating)) |>
+  plot_ly(
+    x = ~lat, 
+    y = ~long, 
+    color = ~price, 
+    alpha = 0.5, 
+    type = "scatter", 
+    mode = "markers", 
+    text = ~text_label)
+```
+ 
+ ### Box Plots
+ 
+```{r}
+nyc_airbnb |>
+  mutate(neighbourhood = fct_reorder(neighbourhood, price)) |>
+  plot_ly(
+    x = ~neighbourhood,
+    y = ~price,
+    color = ~neighbourhood,
+    type = "box"
+  )
+```
+ 
+ ### Bar Plots
+ 
+```{r}
+nyc_airbnb |>
+  count(neighbourhood) |>
+  mutate(neighbourhood = fct_reorder(neighbourhood, n)) |>
+  plot_ly(
+    x = ~neighbourhood,
+    y = ~n,
+    color = ~neighbourhood,
+    type = "bar"
+  )
+```
+ 
+## ggplotly
+
+Kind of ugly, but can be helpful if you want to see what's going on with a specific datapoint. 
+
+```{r}
+scatter = 
+  nyc_airbnb |>
+  ggplot(aes(x = lat, y = long, color = price)) +
+  geom_point(alpha = 0.5)
+
+ggplotly(scatter)
+```
+
