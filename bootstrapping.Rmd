@@ -1,0 +1,190 @@
+---
+title: "Bootstrapping"
+author: "Brooklynn McNeil"
+date: "2024-11-14"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(modelr)
+library(p8105.datasets)
+library(purrr)
+```
+
+## Class Notes
+
+Repeated Sampling
+-   it would be great if we could draw multiple samples from the same population, but that never really happens
+-   what we end up doing is splitting our sample into multiple samples
+
+Bootstrapping
+-   your sample is drawn at random from the population
+-   draw a sample with replacement
+
+Why Bootstrapping?
+-   we want to prove that all of our assumptions are met in order to use the "known" distribution
+
+## Boostrapping!
+
+let's make up some data
+
+```{r}
+n_samp = 250
+
+sim_df_constant = 
+  tibble(
+    x = rnorm(n_samp, 1, 1),
+    error = rnorm(n_samp, 0, 1),
+    y = 2 + 3 * x + error
+  )
+
+sim_df_nonconstant = 
+  sim_df_constant |>
+  mutate(
+    error = error * 0.75 * x,
+    y = 2 + 3 * x + error
+  )
+```
+
+Let's look at these.
+
+```{r}
+sim_df_constant |>
+  ggplot(aes(x = x, y =y)) +
+  geom_point() +
+  stat_smooth(method = "lm")
+
+sim_df_nonconstant |>
+  ggplot(aes(x = x, y =y)) +
+  geom_point() +
+  stat_smooth(method = "lm")
+```
+
+Look at regression results.
+
+```{r}
+sim_df_constant |>
+  lm(y ~ x, data = _) |>
+  broom::tidy() |>
+  knitr::kable(digits = 3)
+
+sim_df_nonconstant |>
+  lm(y ~ x, data = _) |>
+  broom::tidy() |>
+  knitr::kable(digits = 3)
+```
+
+## Draw a bootstrap sample
+
+```{r}
+boot_samp = function(df) {
+  
+  boot_df = sample_frac(df, replace = TRUE) |>
+    arrange(x)
+  
+  return(boot_df)
+  
+}
+```
+
+Let's run it!
+
+```{r}
+sim_df_nonconstant |>
+  boot_samp() |>
+  ggplot(aes(x =x, y =y)) +
+  geom_point(alpha = 0.5) +
+  stat_smooth(method = "lm")
+```
+
+Can we do this as part of an anlaysis. 
+
+```{r}
+sim_df_nonconstant |>
+  boot_samp() |>
+  lm(y ~ x, data = _) |>
+  broom::tidy() |>
+  knitr::kable(digits = 3)
+```
+
+## Boostrap A LOT
+
+```{r}
+boot_straps = 
+  tibble(
+    strap_n = 1:1000
+    ) |>
+  mutate(
+    strap_samp = map(strap_n, \(i) boot_samp(df = sim_df_nonconstant)),
+    models = map(strap_samp, \(df) lm(y ~ x, data = df)),
+    results = map(models, broom::tidy)
+    )
+
+boot_strap_results =
+  boot_straps |>
+  select(strap_n, results) |>
+  unnest(results) |>
+  group_by(term) |>
+  summarize(boot_se = sd(estimate)) |>
+  knitr::kable()
+```
+
+## do all this using modelr
+
+```{r}
+boot_straps = 
+  sim_df_nonconstant |>
+  modelr::bootstrap(1000) |>
+  mutate(
+    strap = map(strap, as.tibble),
+    models = map(strap, \(df) lm(y ~ x , data = df)),
+    results = map(models, broom::tidy)
+  ) |>
+  select(.id, results) |>
+  unnest(results)
+```
+
+## Air bnb data
+
+```{r}
+data("nyc_airbnb")
+
+manhattan_df = 
+  nyc_airbnb |> 
+  mutate(stars = review_scores_location / 2) |> 
+  rename(
+    borough = neighbourhood_group,
+    neighborhood = neighbourhood) |> 
+  filter(borough == "Manhattan") |> 
+  drop_na(price, stars) |> 
+  select(price, stars, room_type)
+```
+
+Plot the data
+
+```{r}
+manhattan_df |>
+  ggplot(aes(x = stars, y = price)) +
+  geom_point() +
+  stat_smooth(method = "lm", se = FALSE)
+```
+
+fit a regression
+
+```{r}
+manhattan_df |>
+  modelr::bootstrap(1000) |>
+  mutate(
+    strap = map(strap, as.tibble),
+    models = map(strap, \(df) lm(price ~ stars + room_type, data = df)),
+    results = map(models, broom::tidy)
+    ) |>
+  select(.id, results) |>
+  unnest(results) |>
+  filter(term == "stars") |>
+  ggplot(aes(x = estimate)) +
+  geom_density()
+```
+
